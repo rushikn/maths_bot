@@ -46,6 +46,22 @@ st.markdown(
       .flash-label { font-size: .72rem; opacity: .72; margin-bottom: 3px; }
       .flash-value { font-size: 1.15rem; font-weight: 750; overflow-wrap: anywhere; }
       .flash-answer { color: #86efac; }
+      .correct-flash {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 8px 14px;
+        margin: 8px 0 10px 0;
+        border: 1px solid rgba(74, 222, 128, .42);
+        border-radius: 10px;
+        background: rgba(34, 197, 94, .09);
+        color: #4ade80;
+        font-size: .95rem;
+        font-weight: 700;
+        text-align: center;
+      }
+      .correct-flash .tick { color: #4ade80; }
       div.stButton > button { border-radius: 12px; min-height: 2.8rem; font-weight: 600; }
       div[data-testid="stFormSubmitButton"] button { border-radius: 12px; }
       @media (max-width: 600px) {
@@ -105,6 +121,7 @@ def reset_session():
     st.session_state.awaiting_continue = False
     st.session_state.feedback_question = None
     st.session_state.feedback_user_answer = None
+    st.session_state.last_correct_feedback = None
 
 def make_question(section):
     if section == "Tables Practice":
@@ -182,6 +199,10 @@ def submit_answer():
     })
     if is_correct:
         st.session_state.correct += 1
+        st.session_state.last_correct_feedback = {
+            "question": question["display"],
+            "answer": question["answer"],
+        }
         # Correct answer: move straight to a new random question.
         next_question()
     else:
@@ -318,6 +339,20 @@ elif st.session_state.active:
     m1.metric("Attempted", total)
     m2.metric("Correct", st.session_state.correct)
     m3.metric("Accuracy", f"{accuracy}%")
+
+    # Show the last correct calculation in a small green bar above the question.
+    success_feedback = st.session_state.get("last_correct_feedback")
+    if success_feedback:
+        st.markdown(
+            f"""
+            <div class="correct-flash">
+                <span class="tick">✓</span>
+                <span>{success_feedback["question"]} = {success_feedback["answer"]}</span>
+                <span>Correct!</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     question = st.session_state.current_question
     st.markdown(
