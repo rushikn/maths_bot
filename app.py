@@ -1,5 +1,6 @@
 import random
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="Math Practice",
@@ -30,8 +31,28 @@ st.markdown(
       .question-label { font-size: .9rem; opacity: .7; margin-bottom: .6rem; }
       .question { font-size: clamp(2.5rem, 7vw, 4rem); font-weight: 750; letter-spacing: -1px; }
       .subtle { text-align:center; opacity:.7; font-size:.9rem; }
+      .flashcard {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border: 1px solid rgba(230,181,102,.55);
+        background: rgba(230,181,102,.08);
+        border-radius: 14px;
+        padding: 12px 16px;
+        margin: 10px 0 8px 0;
+      }
+      .flash-item { flex: 1; min-width: 0; text-align: center; }
+      .flash-label { font-size: .72rem; opacity: .72; margin-bottom: 3px; }
+      .flash-value { font-size: 1.15rem; font-weight: 750; overflow-wrap: anywhere; }
+      .flash-answer { color: #86efac; }
       div.stButton > button { border-radius: 12px; min-height: 2.8rem; font-weight: 600; }
       div[data-testid="stFormSubmitButton"] button { border-radius: 12px; }
+      @media (max-width: 600px) {
+        .flashcard { gap: 6px; padding: 10px 8px; }
+        .flash-value { font-size: .95rem; }
+        .flash-label { font-size: .65rem; }
+      }
     </style>
     """,
     unsafe_allow_html=True,
@@ -62,6 +83,7 @@ def init_state():
         "cube_max": 15,
         "range_signature": None,
         "applied_range_signature": None,
+        "continue_input": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -89,9 +111,9 @@ def make_question(section):
         low = int(st.session_state.from_table)
         high = int(st.session_state.to_table)
 
-        # Both numbers stay within the selected range.
+        # X stays within the selected table range; Y is always 1 to 10.
         first = random.randint(low, high)
-        second = random.randint(low, high)
+        second = random.randint(1, 10)
 
         return {"display": f"{first} × {second}", "answer": first * second,
                 "left": first, "right": second}
@@ -203,7 +225,7 @@ with st.sidebar:
             st.number_input("From table", min_value=1, max_value=100, step=1, key="from_table")
             st.number_input("To table", min_value=1, max_value=100, step=1, key="to_table")
             apply_range = st.form_submit_button("Apply Range", use_container_width=True)
-        st.caption("Both numbers are randomly selected within your chosen table range.")
+        st.caption("First number follows your selected table range; second number is always 1–10.")
         valid_range = st.session_state.from_table <= st.session_state.to_table
         if apply_range:
             if valid_range:
@@ -309,11 +331,75 @@ elif st.session_state.active:
     )
 
     if st.session_state.get("awaiting_continue", False):
-        st.error(
-            f"Not quite! Your answer: **{st.session_state.get('feedback_user_answer')}**. "
-            f"Correct answer: **{st.session_state.get('feedback_answer')}**."
+        # Compact horizontal flashcard: question, your answer, and correct answer.
+        st.markdown(
+            f"""
+            <div class="flashcard">
+              <div class="flash-item">
+                <div class="flash-label">💡 REMEMBER</div>
+                <div class="flash-value">{st.session_state.get('feedback_question', '')}</div>
+              </div>
+              <div class="flash-item">
+                <div class="flash-label">YOUR ANSWER</div>
+                <div class="flash-value">{st.session_state.get('feedback_user_answer', '')}</div>
+              </div>
+              <div class="flash-item">
+                <div class="flash-label">CORRECT ANSWER</div>
+                <div class="flash-value flash-answer">{st.session_state.get('feedback_answer', '')}</div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        if st.button("Next Question →", type="primary", use_container_width=True):
+        # Enter while this small field is focused submits the form and continues.
+        with st.form("continue_after_wrong_form", clear_on_submit=True):
+            _, input_col, button_col = st.columns([1.2, 2, 1.3])
+            with input_col:
+                st.text_input(
+                    "Press Enter to continue",
+                    key="continue_input",
+                    placeholder="Press Enter for next question",
+                    label_visibility="collapsed",
+                    autocomplete="off",
+                )
+            # Automatically focus the continue field after a wrong answer.
+            # This lets the user press Enter without clicking the input first.
+            components.html(
+                """
+                <script>
+                const focusContinueInput = () => {
+                    try {
+                        const doc = window.parent.document;
+                        const input = doc.querySelector(
+                            'input[placeholder="Press Enter for next question"]'
+                        );
+                        if (input) {
+                            input.focus();
+                            input.select();
+                            return true;
+                        }
+                    } catch (e) {}
+                    return false;
+                };
+                let tries = 0;
+                const timer = setInterval(() => {
+                    tries += 1;
+                    if (focusContinueInput() || tries >= 20) {
+                        clearInterval(timer);
+                    }
+                }, 100);
+                </script>
+                """,
+                height=0,
+                width=0,
+            )
+            with button_col:
+                continue_clicked = st.form_submit_button(
+                    "Next Question ↵",
+                    type="primary",
+                    use_container_width=True,
+                )
+        if continue_clicked:
             continue_after_wrong()
             st.rerun()
     else:
