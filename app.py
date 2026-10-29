@@ -362,36 +362,35 @@ elif st.session_state.active:
                     label_visibility="collapsed",
                     autocomplete="off",
                 )
-            # Automatically focus the continue field after a wrong answer.
-            # This lets the user press Enter without clicking the input first.
+            # Keep retrying focus because Streamlit renders widgets asynchronously.
+            # After a wrong answer, Enter should work without clicking the input.
             components.html(
                 """
                 <script>
-                const focusContinueInput = () => {
-                    try {
-                        const doc = window.parent.document;
-                        const input = doc.querySelector(
-                            'input[placeholder="Press Enter for next question"]'
-                        );
-                        if (input) {
-                            input.focus();
-                            input.select();
-                            return true;
+                (() => {
+                    let tries = 0;
+                    const timer = setInterval(() => {
+                        tries += 1;
+                        try {
+                            const doc = window.parent.document;
+                            const input = doc.querySelector(
+                                'input[placeholder="Press Enter for next question"]'
+                            );
+                            if (input) {
+                                input.focus({ preventScroll: true });
+                                input.click();
+                                clearInterval(timer);
+                            }
+                        } catch (e) {
+                            // Retry until Streamlit finishes rendering the widget.
                         }
-                    } catch (e) {}
-                    return false;
-                };
-                let tries = 0;
-                const timer = setInterval(() => {
-                    tries += 1;
-                    if (focusContinueInput() || tries >= 20) {
-                        clearInterval(timer);
-                    }
-                }, 100);
+                        if (tries >= 40) clearInterval(timer);
+                    }, 150);
+                })();
                 </script>
                 """,
-                height=0,
-                width=0,
+                height=1,
+                width=1,
             )
             with button_col:
                 continue_clicked = st.form_submit_button(
@@ -412,6 +411,35 @@ elif st.session_state.active:
                 autocomplete="off",
             )
             st.form_submit_button("Submit ↵", type="primary", use_container_width=True, on_click=submit_answer)
+
+        # When a new question appears, automatically focus the answer field.
+        components.html(
+            """
+            <script>
+            (() => {
+                let tries = 0;
+                const timer = setInterval(() => {
+                    tries += 1;
+                    try {
+                        const doc = window.parent.document;
+                        const input = doc.querySelector(
+                            'input[placeholder="Type your answer and press Enter"]'
+                        );
+                        if (input) {
+                            input.focus({ preventScroll: true });
+                            clearInterval(timer);
+                        }
+                    } catch (e) {
+                        // Retry while Streamlit renders the answer field.
+                    }
+                    if (tries >= 40) clearInterval(timer);
+                }, 150);
+            })();
+            </script>
+            """,
+            height=1,
+            width=1,
+        )
 
     st.write("")
     if st.button("■ Stop Practice", use_container_width=True):
